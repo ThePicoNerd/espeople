@@ -20,11 +20,12 @@
             "includePath": [
                 "/home/thepiconerd/.arduino15/packages/esp8266/hardware/esp8266/3.0.1/tools/sdk/include",
                 "/home/thepiconerd/.arduino15/packages/esp8266/hardware/esp8266/3.0.1/tools/sdk/lwip2/include",
-                "/home/thepiconerd/Code/ThePicoNerd/espeople/build/core",
+                "/home/thepiconerd/Code/ThePicoNerd/espeople/esp/build/core",
                 "/home/thepiconerd/.arduino15/packages/esp8266/hardware/esp8266/3.0.1/cores/esp8266",
                 "/home/thepiconerd/.arduino15/packages/esp8266/hardware/esp8266/3.0.1/variants/generic",
                 "/home/thepiconerd/.arduino15/packages/esp8266/hardware/esp8266/3.0.1/libraries/ESP8266WiFi/src",
                 "/home/thepiconerd/.arduino15/packages/esp8266/hardware/esp8266/3.0.1/libraries/ESP8266HTTPClient/src",
+                "/home/thepiconerd/Arduino/libraries/ArduinoJson/src",
                 "/home/thepiconerd/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/3.0.3-gcc10.3-9bcba0b/xtensa-lx106-elf/include/c++/10.3.0",
                 "/home/thepiconerd/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/3.0.3-gcc10.3-9bcba0b/xtensa-lx106-elf/include/c++/10.3.0/xtensa-lx106-elf",
                 "/home/thepiconerd/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/3.0.3-gcc10.3-9bcba0b/xtensa-lx106-elf/include/c++/10.3.0/backward",
