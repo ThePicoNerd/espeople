@@ -14,8 +14,8 @@ const char *pass = "xxxxx";
 // How many times to listen to each channel
 #define CHANNEL_ROUNDS 4
 
-// How long to sleep between measurements (microseconds)
-#define SLEEP_MS 10e3
+// How long to sleep between measurements
+#define SLEEP_MS 300e3
 
 #define CHANNEL_HOP_INTERVAL_MS 500
 
@@ -88,9 +88,13 @@ void channel_hop()
 
 static os_timer_t channelHop_timer;
 
+#define MAX_WIFI_DOTS 120
+
 void flush_remote()
 {
   unsigned long measure_millis = millis() - measurement_start;
+  uint8_t wifi_count = 0;
+
   wifi_promiscuous_enable(0);
   wifi_set_opmode(WIFI_OFF);
   wifi_set_opmode(WIFI_STA);
@@ -104,7 +108,17 @@ void flush_remote()
     digitalWrite(LED_BUILTIN, LOW);
     delay(250);
     Serial.print(".");
+    wifi_count++;
+
+    if (wifi_count > MAX_WIFI_DOTS) {
+      digitalWrite(LED_BUILTIN, HIGH);
+
+      // cannot connect for 60 seconds
+      Serial.println(" aborted!");
+      ESP.restart();
+    }
   }
+
   digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.println(" connected!");
@@ -127,7 +141,7 @@ void flush_remote()
   Serial.print("current time: ");
   Serial.print(asctime(&timeinfo));
 
-  Serial.printf("found %i packets in %ims\n", packet_count, measure_millis);
+  Serial.printf("found %i packets in %lims\n", packet_count, measure_millis);
 
   fetch.begin("http://192.168.0.38:8000/insert");
   fetch.addHeader("Content-Type", "application/json");
@@ -191,12 +205,17 @@ void loop()
     flush_remote();
 
     wifi_set_opmode(WIFI_OFF);
+    WiFi.forceSleepBegin();
+    delay( 1 );
 
     Serial.println("going to sleep, deep sleep not implemented :(");
     delay(SLEEP_MS);
 
     rounds = 0;
     packet_count = 0;
+
+    WiFi.forceSleepWake();
+    delay(1);
 
     sniffer_init();
     os_timer_arm(&channelHop_timer, CHANNEL_HOP_INTERVAL_MS, 1);
