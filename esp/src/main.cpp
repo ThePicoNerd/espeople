@@ -1,10 +1,11 @@
 #include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
 #include "sdk_structs.h"
+#include "iee80211_structs.h"
+#include "fetch.h"
 
-// const char *ssid = "ssid";
-// const char *pass = "xxxxx";
+const char *ssid = "ssid";
+const char *pass = "xxxxx";
 
 #define LED_BUILTIN 2
 
@@ -98,23 +99,38 @@ void flush_remote()
 
   while (WiFi.status() != WL_CONNECTED)
   {
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(50);
     digitalWrite(LED_BUILTIN, HIGH);
-    delay(450);
+    delay(250);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(250);
     Serial.print(".");
   }
+  digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.println(" connected!");
 
+  Serial.print("waiting for ntp sync ");
+  time_t now = time(nullptr);
+  configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+
+  while (now < 8 * 3600 * 2)
+  {
+    delay(500);
+    Serial.print(".");
+    now = time(nullptr);
+  }
+
+  Serial.println(" done!");
+
+  struct tm timeinfo;
+  gmtime_r(&now, &timeinfo);
+  Serial.print("current time: ");
+  Serial.print(asctime(&timeinfo));
+
   Serial.printf("found %i packets in %ims\n", packet_count, measure_millis);
 
-  WiFiClient wifi;
-
-  HTTPClient http;
-
-  http.begin(wifi, "http://192.168.0.38:8000/insert");
-  http.addHeader("Content-Type", "application/json");
+  fetch.begin("http://192.168.0.38:8000/insert");
+  fetch.addHeader("Content-Type", "application/json");
 
   StaticJsonDocument<32> doc;
 
@@ -125,11 +141,11 @@ void flush_remote()
 
   serializeJson(doc, json);
 
-  int code = http.POST(json);
+  int code = fetch.POST(json);
 
   Serial.printf("got code %i\n", code);
 
-  http.end();
+  fetch.clean();
 }
 
 void setup()

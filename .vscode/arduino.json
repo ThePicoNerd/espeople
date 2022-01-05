@@ -1,6 +1,0 @@
-{
-    "port": "/dev/ttyUSB0",
-    "board": "esp8266:esp8266:generic",
-    "sketch": "esp/src/main.ino",
-    "output": "./esp/build"
-}
