@@ -1,12 +1,16 @@
 #include <ESP8266WiFi.h>
-#include <ArduinoJson.h>
 #include "sdk_structs.h"
 #include "iee80211_structs.h"
-#include "fetch.h"
+#include "credentials.h"
 
-const char *ssid = "ssid";
-const char *pass = "xxxxx";
+#include <InfluxDbClient.h>
+#include <InfluxDbCloud.h>
 
+InfluxDBClient influx_client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
+
+Point pointMeasurement("measurement");
+
+  
 #define LED_BUILTIN 2
 
 #define CHANNELS 13
@@ -15,20 +19,14 @@ const char *pass = "xxxxx";
 #define CHANNEL_ROUNDS 4
 
 // How long to sleep between measurements
-#define SLEEP_MS 300e3
+#define SLEEP_MS 90e3
 
-#define CHANNEL_HOP_INTERVAL_MS 500
+#define CHANNEL_HOP_INTERVAL_MS 1000
 
 unsigned long measurement_start = 0;
 
 uint16_t packet_count = 0;
 uint8_t rounds = 0;
-
-void mac2str(const uint8_t *ptr, char *string)
-{
-  sprintf(string, "%02x:%02x:%02x:%02x:%02x:%02x", ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5]);
-  return;
-}
 
 void handle_packet(uint8_t *buf, uint16_t len)
 {
@@ -98,8 +96,8 @@ void flush_remote()
   wifi_promiscuous_enable(0);
   wifi_set_opmode(WIFI_OFF);
   wifi_set_opmode(WIFI_STA);
-  WiFi.begin(ssid, pass);
-  Serial.printf("connecting to %s ", ssid);
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  Serial.printf("connecting to %s ", WIFI_SSID);
 
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -110,7 +108,8 @@ void flush_remote()
     Serial.print(".");
     wifi_count++;
 
-    if (wifi_count > MAX_WIFI_DOTS) {
+    if (wifi_count > MAX_WIFI_DOTS)
+    {
       digitalWrite(LED_BUILTIN, HIGH);
 
       // cannot connect for 60 seconds
@@ -125,9 +124,9 @@ void flush_remote()
 
   Serial.print("waiting for ntp sync ");
   time_t now = time(nullptr);
-  configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
 
-  while (now < 8 * 3600 * 2)
+  while (time(nullptr) < 1000000000l)
   {
     delay(500);
     Serial.print(".");
@@ -143,23 +142,20 @@ void flush_remote()
 
   Serial.printf("found %i packets in %lims\n", packet_count, measure_millis);
 
-  fetch.begin("http://192.168.0.38:8000/insert");
-  fetch.addHeader("Content-Type", "application/json");
+  pointMeasurement.clearFields();
 
-  StaticJsonDocument<32> doc;
+  float pps = (float(packet_count) / float(measure_millis)) * 1000;
 
-  doc["packet_count"] = packet_count;
-  doc["duration"] = measure_millis;
+  pointMeasurement.addField("pps", pps);
 
-  String json;
+  Serial.print("Writing: ");
+  Serial.println(pointMeasurement.toLineProtocol());
 
-  serializeJson(doc, json);
-
-  int code = fetch.POST(json);
-
-  Serial.printf("got code %i\n", code);
-
-  fetch.clean();
+  if (!influx_client.writePoint(pointMeasurement))
+  {
+    Serial.print("InfluxDB write failed: ");
+    Serial.println(influx_client.getLastErrorMessage());
+  }
 }
 
 void setup()
@@ -175,20 +171,9 @@ void setup()
   }
   digitalWrite(LED_BUILTIN, HIGH);
 
+  pointMeasurement.addTag("device", WiFi.macAddress());
+  
   sniffer_init();
-
-  // Serial.printf("Connecting to %s ", ssid);
-  // WiFi.begin(ssid, pass);
-  // while (WiFi.status() != WL_CONNECTED)
-  // {
-  //   digitalWrite(LED_BUILTIN, LOW);
-  //   delay(50);
-  //   digitalWrite(LED_BUILTIN, HIGH);
-  //   delay(450);
-  //   Serial.print(".");
-  // }
-
-  // Serial.println(" connected");
 
   os_timer_disarm(&channelHop_timer);
   os_timer_setfn(&channelHop_timer, (os_timer_func_t *)channel_hop, NULL);
@@ -206,7 +191,7 @@ void loop()
 
     wifi_set_opmode(WIFI_OFF);
     WiFi.forceSleepBegin();
-    delay( 1 );
+    delay(1);
 
     Serial.println("going to sleep, deep sleep not implemented :(");
     delay(SLEEP_MS);
