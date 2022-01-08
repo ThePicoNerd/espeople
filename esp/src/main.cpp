@@ -2,6 +2,7 @@
 #include "sdk_structs.h"
 #include "iee80211_structs.h"
 #include "credentials.h"
+#include <Vector.h>
 
 #include <InfluxDbClient.h>
 #include <InfluxDbCloud.h>
@@ -10,7 +11,6 @@ InfluxDBClient influx_client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUX
 
 Point pointMeasurement("measurement");
 
-  
 #define LED_BUILTIN 2
 
 #define CHANNELS 13
@@ -24,9 +24,27 @@ Point pointMeasurement("measurement");
 #define CHANNEL_HOP_INTERVAL_MS 1000
 
 unsigned long measurement_start = 0;
+Vector<uint64_t> addresses;
 
 uint16_t packet_count = 0;
+uint16_t legit_packet_count = 0;
+uint16_t probe_requests = 0;
+
 uint8_t rounds = 0;
+
+void mac2str(const uint8_t *ptr, char *string)
+{
+  sprintf(string, "%02x:%02x:%02x:%02x:%02x:%02x", ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5]);
+  return;
+}
+
+uint64_t mac_to_int(const uint8_t *ptr)
+{
+  return uint64_t(ptr[0]) << 40 |
+         uint64_t(ptr[1]) << 32 | (
+                                      // 32-bit instructions take fewer bytes on x86, so use them as much as possible.
+                                      uint32_t(ptr[2]) << 24 | uint32_t(ptr[3]) << 16 | uint32_t(ptr[4]) << 8 | uint32_t(ptr[5]));
+}
 
 void handle_packet(uint8_t *buf, uint16_t len)
 {
@@ -43,16 +61,74 @@ void handle_packet(uint8_t *buf, uint16_t len)
   // Pointer to the frame control section within the packet header
   const wifi_header_frame_control_t *frame_ctrl = (wifi_header_frame_control_t *)&hdr->frame_ctrl;
 
-  // char addr1[] = "00:00:00:00:00:00\0";
-  // char addr2[] = "00:00:00:00:00:00\0";
-  // char addr3[] = "00:00:00:00:00:00\0";
+  if (frame_ctrl->type == WIFI_PKT_MGMT)
+  {
+    if (frame_ctrl->subtype == BEACON)
+    {
+      return; // beacos are dumb
+    }
 
-  // mac2str(hdr->addr1, addr1);
-  // mac2str(hdr->addr2, addr2);
-  // mac2str(hdr->addr3, addr3);
+    if (frame_ctrl->subtype == PROBE_REQ)
+    {
+      probe_requests++;
+    }
+  }
 
-  // Output info to serial
-  // Serial.printf("%s  %s  %s  %i\n", addr1, addr2, addr3, ppkt->rx_ctrl.rssi);
+  legit_packet_count++;
+
+  uint64_t addr1 = mac_to_int(hdr->addr1);
+  uint64_t addr2 = mac_to_int(hdr->addr2);
+  // uint64_t addr3 = mac_to_int(hdr->addr3);
+
+  // char a[] = "00:00:00:00:00:00\0";
+  // char b[] = "00:00:00:00:00:00\0";
+
+  // mac2str(hdr->addr1, a);
+  // mac2str(hdr->addr2, b);
+
+  // Serial.printf("%i,%s,%s,%i\n", frame_ctrl->type, frame_ctrl->subtype, a, b, ppkt->rx_ctrl.rssi);
+
+  if (addresses.Size() == 0)
+  {
+    addresses.PushBack(addr1);
+    addresses.PushBack(addr2);
+    // addresses.PushBack(addr3);
+  }
+  else
+  {
+    for (int i = 0; i < addresses.Size(); i++)
+    {
+      if (addresses[i] == addr1)
+        break;
+
+      if (i == addresses.Size() - 1)
+      {
+        addresses.PushBack(addr1);
+      }
+    }
+
+    for (int i = 0; i < addresses.Size(); i++)
+    {
+      if (addresses[i] == addr2)
+        break;
+
+      if (i == addresses.Size() - 1)
+      {
+        addresses.PushBack(addr2);
+      }
+    }
+
+    // for (int i = 0; i < addresses.Size(); i++)
+    // {
+    //   if (addresses[i] == addr3)
+    //     break;
+
+    //   if (i == addresses.Size() - 1)
+    //   {
+    //     addresses.PushBack(addr3);
+    //   }
+    // }
+  }
 }
 
 void sniffer_init()
@@ -144,9 +220,16 @@ void flush_remote()
 
   pointMeasurement.clearFields();
 
-  float pps = (float(packet_count) / float(measure_millis)) * 1000;
+  float secs = float(measure_millis) / 1000.0;
+
+  float pps = float(packet_count) / secs;
+  float lpps = float(legit_packet_count) / secs;
+  float prps = float(probe_requests) / secs;
 
   pointMeasurement.addField("pps", pps);
+  pointMeasurement.addField("lpps", lpps);
+  pointMeasurement.addField("prps", prps);
+  pointMeasurement.addField("addresses", addresses.Size());
 
   Serial.print("Writing: ");
   Serial.println(pointMeasurement.toLineProtocol());
@@ -172,7 +255,7 @@ void setup()
   digitalWrite(LED_BUILTIN, HIGH);
 
   pointMeasurement.addTag("device", WiFi.macAddress());
-  
+
   sniffer_init();
 
   os_timer_disarm(&channelHop_timer);
@@ -198,6 +281,9 @@ void loop()
 
     rounds = 0;
     packet_count = 0;
+    legit_packet_count = 0;
+    probe_requests = 0;
+    addresses.Clear();
 
     WiFi.forceSleepWake();
     delay(1);
