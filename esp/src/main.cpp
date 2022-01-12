@@ -16,12 +16,12 @@ Point pointMeasurement("measurement");
 #define CHANNELS 13
 
 // How many times to listen to each channel
-#define CHANNEL_ROUNDS 4
+#define CHANNEL_ROUNDS 2
 
 // How long to sleep between measurements
 #define SLEEP_MS 90e3
 
-#define CHANNEL_HOP_INTERVAL_MS 1000
+#define CHANNEL_HOP_INTERVAL_MS 2000
 
 unsigned long measurement_start = 0;
 Vector<uint64_t> addresses;
@@ -172,7 +172,7 @@ void flush_remote()
   wifi_promiscuous_enable(0);
   wifi_set_opmode(WIFI_OFF);
   wifi_set_opmode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.begin(WIFI_SSID);
   Serial.printf("connecting to %s ", WIFI_SSID);
 
   while (WiFi.status() != WL_CONNECTED)
