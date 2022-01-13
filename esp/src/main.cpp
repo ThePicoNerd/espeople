@@ -2,7 +2,6 @@
 #include "sdk_structs.h"
 #include "iee80211_structs.h"
 #include "credentials.h"
-#include <Vector.h>
 
 #include <InfluxDbClient.h>
 #include <InfluxDbCloud.h>
@@ -24,27 +23,12 @@ Point pointMeasurement("measurement");
 #define CHANNEL_HOP_INTERVAL_MS 2000
 
 unsigned long measurement_start = 0;
-Vector<uint64_t> addresses;
 
 uint16_t packet_count = 0;
 uint16_t legit_packet_count = 0;
 uint16_t probe_requests = 0;
 
 uint8_t rounds = 0;
-
-void mac2str(const uint8_t *ptr, char *string)
-{
-  sprintf(string, "%02x:%02x:%02x:%02x:%02x:%02x", ptr[0], ptr[1], ptr[2], ptr[3], ptr[4], ptr[5]);
-  return;
-}
-
-uint64_t mac_to_int(const uint8_t *ptr)
-{
-  return uint64_t(ptr[0]) << 40 |
-         uint64_t(ptr[1]) << 32 | (
-                                      // 32-bit instructions take fewer bytes on x86, so use them as much as possible.
-                                      uint32_t(ptr[2]) << 24 | uint32_t(ptr[3]) << 16 | uint32_t(ptr[4]) << 8 | uint32_t(ptr[5]));
-}
 
 void handle_packet(uint8_t *buf, uint16_t len)
 {
@@ -75,60 +59,6 @@ void handle_packet(uint8_t *buf, uint16_t len)
   }
 
   legit_packet_count++;
-
-  uint64_t addr1 = mac_to_int(hdr->addr1);
-  uint64_t addr2 = mac_to_int(hdr->addr2);
-  // uint64_t addr3 = mac_to_int(hdr->addr3);
-
-  // char a[] = "00:00:00:00:00:00\0";
-  // char b[] = "00:00:00:00:00:00\0";
-
-  // mac2str(hdr->addr1, a);
-  // mac2str(hdr->addr2, b);
-
-  // Serial.printf("%i,%s,%s,%i\n", frame_ctrl->type, frame_ctrl->subtype, a, b, ppkt->rx_ctrl.rssi);
-
-  if (addresses.Size() == 0)
-  {
-    addresses.PushBack(addr1);
-    addresses.PushBack(addr2);
-    // addresses.PushBack(addr3);
-  }
-  else
-  {
-    for (int i = 0; i < addresses.Size(); i++)
-    {
-      if (addresses[i] == addr1)
-        break;
-
-      if (i == addresses.Size() - 1)
-      {
-        addresses.PushBack(addr1);
-      }
-    }
-
-    for (int i = 0; i < addresses.Size(); i++)
-    {
-      if (addresses[i] == addr2)
-        break;
-
-      if (i == addresses.Size() - 1)
-      {
-        addresses.PushBack(addr2);
-      }
-    }
-
-    // for (int i = 0; i < addresses.Size(); i++)
-    // {
-    //   if (addresses[i] == addr3)
-    //     break;
-
-    //   if (i == addresses.Size() - 1)
-    //   {
-    //     addresses.PushBack(addr3);
-    //   }
-    // }
-  }
 }
 
 void sniffer_init()
@@ -229,7 +159,6 @@ void flush_remote()
   pointMeasurement.addField("pps", pps);
   pointMeasurement.addField("lpps", lpps);
   pointMeasurement.addField("prps", prps);
-  pointMeasurement.addField("addresses", addresses.Size());
 
   Serial.print("Writing: ");
   Serial.println(pointMeasurement.toLineProtocol());
@@ -283,7 +212,6 @@ void loop()
     packet_count = 0;
     legit_packet_count = 0;
     probe_requests = 0;
-    addresses.Clear();
 
     WiFi.forceSleepWake();
     delay(1);
