@@ -1,5 +1,6 @@
-import { InfluxDB, Point } from "@influxdata/influxdb-client-browser";
-import useSWR from "swr";
+import { InfluxDB } from "@influxdata/influxdb-client-browser";
+import { DateTime, DateTimeUnit } from "luxon";
+import useSWR, { SWRConfiguration, SWRResponse } from "swr";
 
 export const influxClient = new InfluxDB({
   url: process.env.NEXT_PUBLIC_INFLUX_URL!,
@@ -10,40 +11,34 @@ interface Measurement {
   device: string;
   value: number;
   time: number;
-  movingAverage: number | null;
+  secondsSinceMidnight: number;
 }
 
 export function fetchMeasurements(
-  range: string,
-  includePrevious = 5
+  start: string,
+  stop = "now()"
 ): Promise<Measurement[]> {
   return new Promise((resolve, reject) => {
     const measurements: Measurement[] = [];
 
     const fluxQuery = `
     from(bucket: "${process.env.NEXT_PUBLIC_INFLUX_BUCKET}")
-    |> range(start: ${range})
-    |> filter(fn: (r) => r._field == "prps")`;
+      |> range(start: ${start}, stop: ${stop})
+      |> filter(fn: (r) => r._field == "prps")
+      |> timedMovingAverage(every: 2m, period: 10m)
+    `;
 
     influxClient.queryRows(fluxQuery, {
       next: (row, tableMeta) => {
         const o = tableMeta.toObject(row);
-
-        const previousMeasurements = measurements
-          .slice(1)
-          .slice(-includePrevious);
-        const movingAverage =
-          previousMeasurements.length === includePrevious
-            ? (previousMeasurements.reduce((acc, cur) => acc + cur.value, 0) +
-                o._value) /
-              (includePrevious + 1)
-            : null;
+        const time = DateTime.fromISO(o._time);
 
         measurements.push({
           device: o.device,
           value: o._value,
-          time: new Date(o._time).getTime(),
-          movingAverage,
+          time: time.toMillis(),
+          secondsSinceMidnight:
+            time.hour * 3600 + time.minute * 60 + time.second,
         });
       },
       error: reject,
@@ -54,12 +49,14 @@ export function fetchMeasurements(
   });
 }
 
-export const useMeasurements = (range = "-1d") => {
+export const useMeasurements = (
+  start = "-1d",
+  stop = "now()",
+  config?: SWRConfiguration
+): SWRResponse<Measurement[]> => {
   return useSWR(
-    `/measurements?range=${range}`,
-    () => fetchMeasurements(range),
-    {
-      refreshInterval: 10000,
-    }
+    `/measurements?start=${start}&stop=${stop}`,
+    () => fetchMeasurements(start, stop),
+    config
   );
 };
