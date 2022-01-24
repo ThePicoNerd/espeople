@@ -1,4 +1,4 @@
-import { FunctionComponent, useState } from "react";
+import { FunctionComponent } from "react";
 import {
   CartesianGrid,
   Legend,
@@ -9,7 +9,7 @@ import {
   XAxis,
 } from "recharts";
 import { DateTime } from "luxon";
-import { useMeasurements } from "../lib/data";
+import { useMax, useMeasurements } from "../lib/data";
 import { Spinner } from "./Spinner";
 import { useTime } from "../lib/use-time";
 
@@ -42,6 +42,11 @@ export const Chart: FunctionComponent = () => {
     {
       refreshInterval: 10000,
     }
+  );
+  const { data: max } = useMax(
+    lastWeek.startOf("day").toISO(),
+    yesterday.endOf("day").toISO(),
+    { revalidateOnFocus: false }
   );
 
   return (
@@ -100,9 +105,15 @@ export const Chart: FunctionComponent = () => {
             stroke="#666"
             strokeWidth={0.5}
             strokeDasharray={10}
-            style={{ fill: "#fff" }}
-            fill="#fff"
           />
+          <ReferenceLine
+            y={max}
+            label="Sju dagars högsta"
+            stroke="#666"
+            strokeWidth={0.5}
+            strokeDasharray={10}
+            alwaysShow
+          ></ReferenceLine>
           <Legend iconType="plainline" />
         </LineChart>
       </ResponsiveContainer>

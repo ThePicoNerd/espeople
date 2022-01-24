@@ -49,6 +49,20 @@ export function fetchMeasurements(
   });
 }
 
+export async function fetchMax(start: string, stop = "now()"): Promise<number> {
+  const fluxQuery = `
+  from(bucket: "${process.env.NEXT_PUBLIC_INFLUX_BUCKET}")
+    |> range(start: ${start}, stop: ${stop})
+    |> filter(fn: (r) => r._field == "prps")
+    |> timedMovingAverage(every: 2m, period: 10m)
+    |> max()
+  `;
+
+  const [res] = await influxClient.collectRows(fluxQuery);
+
+  return (res as any)._value;
+}
+
 export const useMeasurements = (
   start = "-1d",
   stop = "now()",
@@ -60,3 +74,11 @@ export const useMeasurements = (
     config
   );
 };
+
+export const useMax = (
+  start = "-1d",
+  stop = "now()",
+  config?: SWRConfiguration
+): SWRResponse<number> => {
+  return useSWR(`/max?start=${start}&stop=${stop}`, () => fetchMax(start, stop), config);
+}
