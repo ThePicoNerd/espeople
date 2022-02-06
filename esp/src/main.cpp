@@ -103,7 +103,7 @@ void flush_remote()
   wifi_set_opmode(WIFI_OFF);
   wifi_set_opmode(WIFI_STA);
   WiFi.begin(WIFI_SSID);
-  Serial.printf("connecting to %s ", WIFI_SSID);
+  Serial.printf("connecting to %s", WIFI_SSID);
 
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -111,7 +111,7 @@ void flush_remote()
     delay(250);
     digitalWrite(LED_BUILTIN, LOW);
     delay(250);
-    Serial.print(".");
+    Serial.printf(" %i", WiFi.status());
     wifi_count++;
 
     if (wifi_count > MAX_WIFI_DOTS)
